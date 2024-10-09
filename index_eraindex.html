@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Clasificación de Lavado de Manos - Cámara</title>
+
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC"
+      crossorigin="anonymous"
+    />
+
+    <style>
+      #resultado {
+        font-weight: bold;
+        font-size: 6rem;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="px-4 py-2 my-2 text-center border-bottom">
+        <h1 class="display-5 fw-bold">Clasificación de Lavado de Manos</h1>
+        <div class="col-lg-6 mx-auto">
+          <p class="lead mb-0">
+            Clasificación de las 12 posiciones del lavado de manos usando la cámara web y Tensorflow.js
+          </p>
+        </div>
+      </div>
+
+      <div class="container mt-5">
+        <div class="row">
+          <div class="col-12 col-md-4 offset-md-4 text-center">
+            <video id="video" playsinline autoplay style="width: 400px; height: 400px;"></video>
+            <button
+              class="btn btn-primary mb-2"
+              id="cambiar-camara"
+              onclick="cambiarCamara();"
+            >
+              Cambiar cámara
+            </button>
+            <canvas id="canvas" width="224" height="224" style="display: none;"></canvas>
+            <div id="resultado"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
+      crossorigin="anonymous"
+    ></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0/dist/tf.min.js"></script>
+
+    <script type="text/javascript">
+      var video = document.getElementById("video");
+      var canvas = document.getElementById("canvas");
+      var ctx = canvas.getContext("2d");
+      var currentStream = null;
+      var facingMode = "user";
+      var modelo = null;
+
+      // Cargar el modelo
+      (async () => {
+        console.log("Cargando modelo...");
+        modelo = await tf.loadLayersModel("model.json");
+        console.log("Modelo cargado");
+      })();
+
+      window.onload = function () {
+        mostrarCamara();
+      };
+
+      function mostrarCamara() {
+        var opciones = {
+          audio: false,
+          video: {
+            facingMode: facingMode,
+          },
+        };
+
+        if (navigator.mediaDevices.getUserMedia) {
+          navigator.mediaDevices
+            .getUserMedia(opciones)
+            .then(function (stream) {
+              currentStream = stream;
+              video.srcObject = currentStream;
+              predecir(); // Iniciar predicción después de configurar el video
+            })
+            .catch(function (err) {
+              alert("No se pudo utilizar la cámara :(");
+              console.log(err);
+            });
+        } else {
+          alert("No existe la función getUserMedia");
+        }
+      }
+
+      function cambiarCamara() {
+        if (currentStream) {
+          currentStream.getTracks().forEach((track) => {
+            track.stop();
+          });
+        }
+
+        facingMode = facingMode == "user" ? "environment" : "user";
+
+        mostrarCamara();
+      }
+
+      function predecir() {
+        if (modelo != null) {
+          // Dibujar el frame actual del video en el canvas
+          ctx.drawImage(video, 0, 0, 224, 224);
+
+          // Convertir la imagen del canvas a un tensor sin normalización
+          let tensor = tf.browser.fromPixels(canvas).expandDims(0); // [1, 224, 224, 3]
+
+          // Realizar la predicción
+          modelo.predict(tensor).data().then((resultado) => {
+            console.log("Resultado de la predicción:", resultado);
+
+            var class_names = [
+              "Step_1",
+              "Step_2_Left",
+              "Step_2_Right",
+              "Step_3",
+              "Step_4_Left",
+              "Step_4_Right",
+              "Step_5_Left",
+              "Step_5_Right",
+              "Step_6_Left",
+              "Step_6_Right",
+              "Step_7_Left",
+              "Step_7_Right",
+            ];
+
+            var maxIndex = resultado.indexOf(Math.max(...resultado));
+            var respuesta = class_names[maxIndex];
+
+            // Mostrar la predicción en la página
+            document.getElementById("resultado").innerHTML = "Predicción: " + respuesta;
+          }).catch((error) => {
+            console.error("Error en la predicción:", error);
+          });
+        } else {
+          console.log("El modelo aún no está cargado");
+        }
+
+        // Realizar una nueva predicción cada 150 ms
+        setTimeout(predecir, 150);
+      }
+    </script>
+  </body>
+</html>
